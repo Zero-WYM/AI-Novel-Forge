@@ -1,0 +1,5 @@
+# 开发/迁移依赖（pip install -r requirements-dev.txt）
+# 注：alembic 已删除（建表统一走 app.models.db.init_db 的 create_all + ALTER），不再需要该依赖。
+pytest>=8.0
+httpx[cli]>=0.27
+aiosqlite>=0.20

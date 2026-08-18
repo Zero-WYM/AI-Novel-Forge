@@ -1,0 +1,35 @@
+# ===== 密钥 / 运行配置（严禁入库）=====
+.env
+.env.*
+!.env.example
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# ===== 前端 / Node =====
+node_modules/
+dist/
+npm-debug.log*
+yarn-error.log*
+
+# ===== 向量库 / 数据库（运行时生成）=====
+.chroma/
+.chroma_data/
+
+# ===== 系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# ===== 本地数据 =====
+pgdata/
+*.log
+
+# ===== WorkBuddy 本地记忆 / 自动化（含私人笔记，勿公开）=====
+.workbuddy/

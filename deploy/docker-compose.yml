@@ -1,0 +1,43 @@
+# AI Novel Forge - Docker Compose（开发/演示一键启动）
+# 使用：确保仓库根目录已存在 .env（含 ZHIPU_API_KEY），直接 docker compose up -d --build
+#      （项目无 .env.example；如需自定义复制根目录 .env 修改即可）
+# 访问：前端 http://localhost:5173 ｜ 后端 http://localhost:8000/docs
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: novelforge
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+    env_file: ../.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/novelforge
+      - CHROMA_PERSIST_DIR=/tmp/ainovelforge_chroma
+    depends_on: [postgres]
+    ports: ["8000:8000"]
+    volumes: ["../backend:/app"]
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../deploy/Dockerfile.frontend
+    depends_on: [backend]
+    ports: ["5173:5173"]
+    environment:
+      # Docker Desktop 在 Windows/macOS 上通过 bind mount 不会把"文件已改动"事件转发进容器，
+      # 导致 Vite 热更新(HMR)感知不到源码变化、F5 也只拿到旧的打包结果。
+      # 开启轮询后 Vite 主动定时扫文件，前端改动即可热更新，无需每次重新部署。
+      - CHOKIDAR_USEPOLLING=true
+    # 挂载源码做热更新；匿名卷保留镜像内已安装的 node_modules，避免被宿主机空目录覆盖导致 dev server 起不来
+    volumes: ["../frontend:/app", "/app/node_modules"]
+
+volumes:
+  pgdata:

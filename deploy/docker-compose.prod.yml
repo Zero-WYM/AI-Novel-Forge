@@ -1,0 +1,61 @@
+# AI Novel Forge - 生产部署（单台服务器 / Oracle Always-Free 整机）
+# 用法：
+#   1) 在仓库根目录放一份 .env（含 ZHIPU_API_KEY 等）；可复制本地 .env，
+#      DATABASE_URL / CHROMA_PERSIST_DIR 会被下方 environment 覆盖，无需手改。
+#   2) 首次部署：docker compose -f deploy/docker-compose.prod.yml up -d --build
+#   3) 浏览器访问 http://<服务器公网IP>
+#   更新代码：在服务器上运行 ./deploy/redeploy.sh
+#
+# 说明：
+#   - 前端由 nginx 托管并同源反代 /api 到 backend，免 CORS
+#   - Postgres 与 Chroma 均用命名卷持久化，重启/重建不丢数据
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: novelforge
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+    env_file: ../.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/novelforge
+      - CHROMA_PERSIST_DIR=/chroma_data
+    # 生产关闭 --reload（覆盖 Dockerfile.backend 的默认 CMD）
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - chroma_data:/chroma_data
+    # 可选：暴露后端便于调试（http://<IP>:8000/docs）；不需要可删掉 ports
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../deploy/Dockerfile.frontend.prod
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  chroma_data:

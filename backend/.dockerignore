@@ -1,0 +1,12 @@
+# 构建上下文不该带进镜像的内容
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/
+.git
+.gitignore
+.env
+.chroma
+*.md

@@ -1,0 +1,9 @@
+FROM node:20-alpine
+WORKDIR /app
+COPY package.json ./
+RUN npm install
+COPY . .
+# 使用 vite dev server（vite.config.js 中已配置 /api → backend:8000 的代理），
+# 这样也能正确转发 API 请求（无需额外反向代理）。
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]

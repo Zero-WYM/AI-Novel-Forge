@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "asyncio: 标记异步端到端测试（test_e2e 使用）",
+]
+filterwarnings = [
+    # Starlette 1.x 弃用旧 httpx、要求 httpx2；本项目使用稳定版 httpx，仅测试客户端触发，与产品运行无关
+    "ignore::starlette.exceptions.StarletteDeprecationWarning",
+]
