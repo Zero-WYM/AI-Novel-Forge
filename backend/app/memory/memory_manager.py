@@ -25,8 +25,18 @@ t_app_config = Table(
     Column("value", Text),
 )
 
+# 用户表（B 方案：独立账号 + 数据隔离）
+t_users = Table(
+    "users", METADATA,
+    Column("id", String, primary_key=True),
+    Column("username", String, unique=True, nullable=False, index=True),
+    Column("password_hash", String, nullable=False),
+    Column("created_at", DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)),
+)
+
 t_novel = Table(
     "novels", METADATA,
+    Column("owner_id", String, index=True),   # B 方案：小说归属用户
     Column("id", String, primary_key=True),
     Column("title", String, nullable=False),
     Column("genre", String),
@@ -108,9 +118,9 @@ class MemoryManager:
         return self._llm
 
     # ----------------------------- 写入 -----------------------------
-    async def create_novel(self, novel_id: str, data: dict) -> None:
+    async def create_novel(self, novel_id: str, data: dict, owner_id: str | None = None) -> None:
         async with self._sf() as s:
-            await s.execute(t_novel.insert().values(id=novel_id, **data))
+            await s.execute(t_novel.insert().values(id=novel_id, owner_id=owner_id, **data))
             await s.commit()
 
     async def save_chapter(self, novel_id: str, chapter_no: int, title: str,
@@ -266,11 +276,13 @@ class MemoryManager:
                 .order_by(t_chapter.c.chapter_no))).mappings().all()
         return [dict(r) for r in rows]
 
-    async def list_novels(self) -> list[dict]:
-        """返回所有小说（按创建时间倒序），供前端「切换新书」列表使用。"""
+    async def list_novels(self, owner_id: str | None = None) -> list[dict]:
+        """返回该用户的小说（按创建时间倒序）；owner_id 为 None 时返回全部（兼容旧数据/管理场景）。"""
+        stmt = t_novel.select().order_by(t_novel.c.created_at.desc())
+        if owner_id is not None:
+            stmt = stmt.where(t_novel.c.owner_id == owner_id)
         async with self._sf() as s:
-            rows = (await s.execute(
-                t_novel.select().order_by(t_novel.c.created_at.desc()))).mappings().all()
+            rows = (await s.execute(stmt)).mappings().all()
         return [dict(r) for r in rows]
 
     async def recent_summaries(self, novel_id: str, limit: int = 5) -> list[str]:

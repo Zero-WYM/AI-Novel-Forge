@@ -32,6 +32,7 @@ async def init_db():
         await conn.run_sync(METADATA.create_all)
         # 2.0 新增列补齐（列已存在时 IF NOT EXISTS 不会报错）
         alter_cmds = [
+            "ALTER TABLE novels ADD COLUMN IF NOT EXISTS owner_id VARCHAR",
             "ALTER TABLE novels ADD COLUMN IF NOT EXISTS world_settings_json JSON",
             "ALTER TABLE characters ADD COLUMN IF NOT EXISTS level VARCHAR",
             "ALTER TABLE characters ADD COLUMN IF NOT EXISTS mood VARCHAR",

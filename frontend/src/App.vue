@@ -27,6 +27,10 @@
         <el-button text class="set-btn" @click="openSettings">
           <el-icon><Setting /></el-icon><span>模型设置</span>
         </el-button>
+        <div class="user-row" v-if="authState.user">
+          <span class="user-name">👤 {{ authState.user.username }}</span>
+          <el-button text class="logout-btn" @click="doLogout">退出</el-button>
+        </div>
       </div>
     </el-aside>
     <el-main :class="isDark ? 'theme-dark-global' : 'theme-light-global'"><router-view /></el-main>
@@ -97,25 +101,36 @@
     </template>
   </el-dialog>
 
-  <!-- 访问口令登录弹窗（未登录 / 口令失效时强制弹出） -->
+  <!-- 登录 / 注册弹窗（未登录 / 令牌失效时强制弹出；开放注册，任何人可自建账号） -->
   <el-dialog
     v-model="authState.showLogin"
-    title="🔐 访问口令"
-    width="420px"
+    title="🔐 进入 AI Novel Forge"
+    width="440px"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :show-close="false"
   >
-    <p class="login-tip">本站需要访问口令才能进入，请输入好友共享的口令。</p>
-    <el-input
-      v-model="loginPwd"
-      type="password"
-      show-password
-      placeholder="请输入访问口令"
-      @keyup.enter="doLogin"
-    />
+    <el-tabs v-model="authState.mode">
+      <el-tab-pane label="注册新账号" name="register" />
+      <el-tab-pane label="登录" name="login" />
+    </el-tabs>
+
+    <!-- 注册 -->
+    <template v-if="authState.mode === 'register'">
+      <el-input v-model="regUsername" placeholder="用户名（唯一）" style="margin-bottom:12px" />
+      <el-input v-model="regPassword" type="password" show-password placeholder="密码（至少 6 位）" style="margin-bottom:12px" @keyup.enter="doRegister" />
+      <el-input v-model="regConfirm" type="password" show-password placeholder="确认密码" @keyup.enter="doRegister" />
+    </template>
+
+    <!-- 登录 -->
+    <template v-else>
+      <el-input v-model="loginUsername" placeholder="用户名" style="margin-bottom:12px" />
+      <el-input v-model="loginPassword" type="password" show-password placeholder="密码" @keyup.enter="doLogin" />
+    </template>
+
     <template #footer>
-      <el-button type="primary" :loading="logging" @click="doLogin">进入</el-button>
+      <el-button v-if="authState.mode === 'register'" type="primary" :loading="submitting" @click="doRegister">注册并进入</el-button>
+      <el-button v-else type="primary" :loading="submitting" @click="doLogin">登录</el-button>
     </template>
   </el-dialog>
 </template>
@@ -127,7 +142,7 @@ import { useNovelStore } from './stores/novel'
 import { ElMessage } from 'element-plus'
 import { Moon, Sunny as SunnyIcon, Setting } from '@element-plus/icons-vue'
 import api from './utils/api'
-import { authState, setToken } from './utils/auth'
+import { authState, setSession, clearToken } from './utils/auth'
 const MoonIcon = Moon
 
 const route = useRoute()
@@ -205,6 +220,18 @@ function applyPreset(p) {
 }
 
 onMounted(async () => {
+  // 校验已有登录态：有 token 则调 /auth/me 确认仍有效并加载用户名；失败则清登录态弹窗
+  if (authState.token) {
+    try {
+      const me = await api.me()
+      authState.user = { id: me.id, username: me.username }
+    } catch {
+      clearToken()
+      authState.showLogin = true
+    }
+  } else {
+    authState.showLogin = true
+  }
   try {
     const c = await store.loadModelConfig()
     cfg.base_url = c.base_url || ''
@@ -239,26 +266,61 @@ async function saveSettings() {
   }
 }
 
-// ---- 访问口令登录 ----
-const loginPwd = ref('')
-const logging = ref(false)
+// ---- 账号登录 / 注册 ----
+const loginUsername = ref('')
+const loginPassword = ref('')
+const regUsername = ref('')
+const regPassword = ref('')
+const regConfirm = ref('')
+const submitting = ref(false)
+
+async function enterSession(data) {
+  setSession(data.token, data.user)
+  authState.showLogin = false
+  ElMessage.success('登录成功')
+  // 重新加载页面，刷新各视图的初次请求
+  setTimeout(() => window.location.reload(), 300)
+}
+
 async function doLogin() {
-  if (!loginPwd.value) { ElMessage.warning('请输入访问口令'); return }
-  logging.value = true
+  if (!loginUsername.value || !loginPassword.value) { ElMessage.warning('请输入用户名和密码'); return }
+  submitting.value = true
   try {
-    const data = await api.login(loginPwd.value)
-    setToken(data.token || '')
-    authState.showLogin = false
-    loginPwd.value = ''
-    ElMessage.success('登录成功')
-    // 重新加载页面，刷新各视图的初次请求
-    setTimeout(() => window.location.reload(), 300)
+    const data = await api.login(loginUsername.value, loginPassword.value)
+    await enterSession(data)
   } catch {
-    // 失败已由拦截器统一提示；清空输入
-    loginPwd.value = ''
+    // 失败已由拦截器统一提示；清空密码
+    loginPassword.value = ''
   } finally {
-    logging.value = false
+    submitting.value = false
   }
+}
+
+async function doRegister() {
+  if (!regUsername.value || !regPassword.value) { ElMessage.warning('请输入用户名和密码'); return }
+  if (regPassword.value.length < 6) { ElMessage.warning('密码至少 6 位'); return }
+  if (regPassword.value !== regConfirm.value) { ElMessage.warning('两次输入的密码不一致'); return }
+  submitting.value = true
+  try {
+    await api.register(regUsername.value, regPassword.value)
+    // 注册成功后自动登录进入
+    const data = await api.login(regUsername.value, regPassword.value)
+    await enterSession(data)
+  } catch {
+    // 失败已由拦截器统一提示（如「用户名已被占用」）
+    regPassword.value = ''
+    regConfirm.value = ''
+  } finally {
+    submitting.value = false
+  }
+}
+
+function doLogout() {
+  clearToken()
+  authState.showLogin = true
+  authState.mode = 'login'
+  ElMessage.info('已退出登录')
+  setTimeout(() => window.location.reload(), 300)
 }
 </script>
 
@@ -322,6 +384,12 @@ async function doLogin() {
 .theme-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; margin-bottom: 4px; }
 .theme-label { color: #cbd5e1; font-size: 13px; }
 
-/* 访问口令登录弹窗 */
-.login-tip { font-size: 14px; color: #475569; margin: 0 0 16px; line-height: 1.6; }
+/* 侧边栏用户栏 */
+.user-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; gap: 8px;
+}
+.user-name { color: #cbd5e1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.logout-btn { color: #cbd5e1; padding: 0 6px; }
+.logout-btn:hover { color: #fff; }
 </style>

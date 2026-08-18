@@ -11,9 +11,9 @@ from app.core.runtime_config import (
     mask_key,
     ModelSettings,
 )
-from app.api.auth import require_access
+from app.api.auth import require_user
 
-router = APIRouter(prefix="/api/config", tags=["config"], dependencies=[Depends(require_access)])
+router = APIRouter(prefix="/api/config", tags=["config"], dependencies=[Depends(require_user)])
 
 
 class ModelConfigIn(BaseModel):

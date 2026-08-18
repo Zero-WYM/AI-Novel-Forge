@@ -54,7 +54,7 @@
 ```bash
 # 0. 配置：复制模板并填入你自己的 Key
 cp .env.example .env
-#    然后编辑 .env，把 ZHIPU_API_KEY 换成你自己的智谱 API Key（ACCESS_PASSWORD 设访问口令）。
+#    然后编辑 .env，把 ZHIPU_API_KEY 换成你自己的智谱 API Key，并设一个随机 SECRET_KEY（JWT 签名密钥）。
 
 # 1. 后端（推荐用 Docker，自动带 PostgreSQL；见「部署」）
 cd backend
@@ -85,12 +85,13 @@ cd backend && pytest -q
 | DATABASE_URL | 异步 DSN（PostgreSQL 或 SQLite 均可） | postgresql+asyncpg://postgres:postgres@localhost:5432/novelforge |
 | CHROMA_PERSIST_DIR | Chroma 持久化目录 | ./.chroma |
 | API_HOST / API_PORT | 服务监听地址/端口 | 0.0.0.0 / 8000 |
-| ACCESS_PASSWORD | **共享访问口令**（线上必填）。留空=不启用鉴权（本地开发无感）；填上后所有业务接口需先登录 | — |
+| SECRET_KEY | **JWT 签名密钥**（线上必填）。未设则回退不安全的开发默认值；生产务必用 `python -c "import secrets;print(secrets.token_urlsafe(32))"` 生成 | — |
+| ALLOW_OPEN_REGISTER | 是否开放注册（默认 true，任何人可访问站点自助注册账号；设为 false 则仅已有账号可登录） | true |
 
 ## 部署
 
 ```bash
-# 复制模板并填入你的配置：cp .env.example .env（记得替换 ZHIPU_API_KEY 与 ACCESS_PASSWORD）。
+# 复制模板并填入你的配置：cp .env.example .env（记得替换 ZHIPU_API_KEY，并设 SECRET_KEY）。
 # 如需自定义，直接编辑根目录 .env 即可。
 docker compose -f deploy/docker-compose.yml up -d --build
 # 前端 http://localhost:5173 ｜ 后端 http://localhost:8000/docs
@@ -116,10 +117,12 @@ docker compose -f deploy/docker-compose.prod.yml up -d --build
 - 持久化：`pgdata`（Postgres）、`chroma_data`（Chroma 向量库）均为命名卷，重启/重建不丢。
 - 云服务器（如 Oracle Always-Free）记得在**安全组/防火墙放行 80**（和可选 443）入站。
 - HTTPS / 域名：可选，后续用 Nginx/Caddy + 免费证书（Let's Encrypt）即可，不影响功能。
-- 🔐 **共享访问口令（A 方案）**：在服务器 `.env` 写入 `ACCESS_PASSWORD=你的口令` 即启用。启用后所有人须先在该口令登录页输入正确口令才能进入；留空则不启用（本地开发默认）。注意：这是「挡外部陌生人」的共享口令，**朋友之间仍共用一个数据库、能看到彼此的小说**（每人自己「创建新书」即可互不干扰）。真正的「每人独立账号+数据隔离」为 B 方案，后续再做。
-- 📌 改完 `.env` 后需 `docker compose -f deploy/docker-compose.prod.yml up -d --build` 或 `./deploy/redeploy.sh` 让新口令生效。
+- 🔐 **独立账号 + 数据隔离（B 方案，当前默认）**：站点开放注册，任何人可自助创建账号（用户名唯一）；登录后后端签发 JWT（HS256，有效期 30 天），所有业务接口须携带该 JWT。每本小说的 `owner_id` 绑定创建者，非本人访问一律 404，**朋友之间完全看不到彼此的小说**。生产部署请在 `.env` 设置强随机 `SECRET_KEY`（JWT 签名密钥）；如需关闭公开注册，把 `ALLOW_OPEN_REGISTER` 设为 `false`。
+- 📌 改完 `.env` 后需 `docker compose -f deploy/docker-compose.prod.yml up -d --build` 或 `./deploy/redeploy.sh` 让新配置生效。
 
-### 方案 C：腾讯云 CloudBase 云托管（国内·推荐）
+### 方案 C：腾讯云 CloudBase 云托管（国内·备选）
+
+> ⚠️ 已降优先级：CloudBase 的 CFS 持久卷需付费私有网络（约 ¥179/月），本项目最终部署目标改为**轻量服务器 Docker Compose**（见上方「生产部署」）。本节保留作备选参考。
 
 适合：朋友都在国内、不想自己管服务器、希望国内访问快。自带域名 + HTTPS，支持从 GitHub 授权拉取代码、**push 自动重新部署**。
 
@@ -136,7 +139,7 @@ docker compose -f deploy/docker-compose.prod.yml up -d --build
    - 监听端口：`80`
 4. 环境变量（在服务的「环境变量」里添加，等同本地 `.env`，**不要写进代码仓库**）：
    - `ZHIPU_API_KEY=你的智谱Key`（必填）
-   - `ACCESS_PASSWORD=你设的访问口令`（必填，启用共享口令登录）
+   - `SECRET_KEY=你的JWT密钥`（必填，建议 `python -c "import secrets;print(secrets.token_urlsafe(32))"` 生成）
    - `DATABASE_URL=sqlite+aiosqlite:////data/novelforge.db`（4 个斜杠 = 绝对路径 `/data/novelforge.db`）
    - `CHROMA_PERSIST_DIR=/data/chroma`
    - `CORS_ORIGINS=*`（同源访问其实不触发 CORS，填 `*` 即可）

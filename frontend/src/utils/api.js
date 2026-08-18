@@ -3,7 +3,7 @@ import { ElMessage } from 'element-plus'
 import { authState, clearToken } from './auth'
 const http = axios.create({ baseURL: '/api', timeout: 120000 })
 
-// 请求拦截：已登录则自动在请求头携带访问口令 token
+// 请求拦截：已登录则自动在请求头携带 JWT
 http.interceptors.request.use((config) => {
   if (authState.token) {
     config.headers = config.headers || {}
@@ -21,18 +21,18 @@ http.interceptors.response.use(
     const data = error.response && error.response.data
     const detail = data && (data.detail || data.message)
 
-    // 401：未登录 / 口令失效 / 登录失败
+    // 401：未登录 / 令牌失效 / 登录失败
     if (status === 401) {
       clearToken()
       const url = (error.config && error.config.url) || ''
-      if (url.includes('/auth/login')) {
-        // 登录接口本身失败：保留弹窗并提示具体原因（如「访问口令错误」）
-        ElMessage.error(typeof detail === 'string' ? detail : '访问口令错误')
+      if (url.includes('/auth/login') || url.includes('/auth/register')) {
+        // 登录 / 注册接口本身失败：保留弹窗并提示具体原因（如「用户名或密码错误」「用户名已被占用」）
+        ElMessage.error(typeof detail === 'string' ? detail : '账号或密码错误')
         return Promise.reject(error)
       }
       // 业务接口未授权：清空登录态并弹出登录框
       authState.showLogin = true
-      ElMessage.error('请先输入访问口令')
+      ElMessage.error('登录已过期，请重新登录')
       return Promise.reject(error)
     }
 
@@ -46,8 +46,12 @@ http.interceptors.response.use(
   }
 )
 export default {
-  // 访问口令登录（无需 token，失败由拦截器统一提示）
-  login: (password) => http.post('/auth/login', { password }).then(r => r.data),
+  // B 方案：账号体系
+  register: (username, password) =>
+    http.post('/auth/register', { username, password }).then(r => r.data),
+  login: (username, password) =>
+    http.post('/auth/login', { username, password }).then(r => r.data),
+  me: () => http.get('/auth/me').then(r => r.data),
   createNovel: (data) => http.post('/novel/create', data).then(r => r.data),
   listNovels: () => http.get('/novel/list').then(r => r.data),
   getNovel: (id) => http.get(`/novel/detail?novel_id=${id}`).then(r => r.data),
