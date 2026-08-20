@@ -308,8 +308,7 @@ async function doRegister() {
     await enterSession(data)
   } catch {
     // 失败已由拦截器统一提示（如「用户名已被占用」）
-    regPassword.value = ''
-    regConfirm.value = ''
+    // 保留密码框内容，避免用户重输
   } finally {
     submitting.value = false
   }
