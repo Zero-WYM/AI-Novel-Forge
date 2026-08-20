@@ -37,6 +37,15 @@ http.interceptors.response.use(
     }
 
     let msg = detail || error.message || '请求失败'
+    // 请求超时： axios ECONNABORTED / message 含 timeout
+    if (!status && (error.code === 'ECONNABORTED' || /timeout/i.test(error.message))) {
+      const url = (error.config && error.config.url) || ''
+      if (url.includes('/bootstrap')) {
+        msg = '⏳ 一键成书需要多次调用大模型，当前响应较慢，请求已超时。建议刷新页面后再点一次，或使用「仅生成大纲」「去大纲选章节写作」分步完成。'
+      } else {
+        msg = '⏳ 请求超时，AI 响应较慢，请稍后重试。'
+      }
+    }
     // 429 / 503：智谱服务拥堵（点太快或模型繁忙），统一给友好提示，不暴露原始报错
     if (status === 429 || status === 503) {
       msg = '⏳ API 服务拥堵，请稍后重试（您点得太快或智谱模型当前繁忙，稍等片刻再试即可）'
@@ -57,8 +66,8 @@ export default {
   getNovel: (id) => http.get(`/novel/detail?novel_id=${id}`).then(r => r.data),
   genOutline: (data) => http.post('/novel/generate-outline', data).then(r => r.data),
   getOutline: (id) => http.get(`/novel/outline?novel_id=${id}`).then(r => r.data),
-  // 一键成书是重活（WorldBuilder→两遍式大纲→CharacterDesigner 串行 4 次 LLM），给足 300s
-  bootstrap: (id) => http.post('/novel/bootstrap', { novel_id: id }, { timeout: 300000 }).then(r => r.data),
+  // 一键成书是重活（WorldBuilder→两遍式大纲→CharacterDesigner 串行 4 次 LLM），nginx 已配 600s，给足 600s
+  bootstrap: (id) => http.post('/novel/bootstrap', { novel_id: id }, { timeout: 600000 }).then(r => r.data),
   genChapter: (data) => http.post('/novel/generate-chapter', data).then(r => r.data),
   generateWorld: (id) => http.post('/novel/generate-world', { novel_id: id }).then(r => r.data),
   getWorld: (id) => http.get(`/novel/world?novel_id=${id}`).then(r => r.data),
