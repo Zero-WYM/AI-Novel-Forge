@@ -284,6 +284,8 @@ async function enterSession(data) {
 
 async function doLogin() {
   if (!loginUsername.value || !loginPassword.value) { ElMessage.warning('请输入用户名和密码'); return }
+  const pwdBytes = new TextEncoder().encode(loginPassword.value).length
+  if (pwdBytes > 72) { ElMessage.warning('密码太长：最多支持 72 字节（约 24 个中文或 72 个英文字母）'); return }
   submitting.value = true
   try {
     const data = await api.login(loginUsername.value, loginPassword.value)
@@ -299,6 +301,8 @@ async function doLogin() {
 async function doRegister() {
   if (!regUsername.value || !regPassword.value) { ElMessage.warning('请输入用户名和密码'); return }
   if (regPassword.value.length < 6) { ElMessage.warning('密码至少 6 位'); return }
+  const pwdBytes = new TextEncoder().encode(regPassword.value).length
+  if (pwdBytes > 72) { ElMessage.warning('密码太长：最多支持 72 字节（约 24 个中文或 72 个英文字母）'); return }
   if (regPassword.value !== regConfirm.value) { ElMessage.warning('两次输入的密码不一致'); return }
   submitting.value = true
   try {

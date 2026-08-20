@@ -48,13 +48,37 @@ class UserOut(BaseModel):
     username: str
 
 
-# ----------------------------- Helpers -----------------------------
+# bcrypt 最大只支持 72 字节；超过会抛 ValueError，用户看不懂。这里统一拦截并转中文提示。
+_MAX_PWD_BYTES = 72
+
+
+def _check_password_length(p: str):
+    if len(p.encode("utf-8")) > _MAX_PWD_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail="密码太长：最多支持 72 字节（约 24 个中文或 72 个英文字母），请缩短后重试")
+
+
 def _hash_password(p: str) -> str:
-    return _pwd.hash(p)
+    try:
+        return _pwd.hash(p)
+    except ValueError as exc:
+        if "cannot be longer than" in str(exc):
+            raise HTTPException(
+                status_code=400,
+                detail="密码太长：最多支持 72 字节（约 24 个中文或 72 个英文字母），请缩短后重试") from exc
+        raise
 
 
 def _verify_password(p: str, h: str) -> bool:
-    return _pwd.verify(p, h)
+    try:
+        return _pwd.verify(p, h)
+    except ValueError as exc:
+        if "cannot be longer than" in str(exc):
+            raise HTTPException(
+                status_code=400,
+                detail="密码太长：最多支持 72 字节（约 24 个中文或 72 个英文字母），请缩短后重试") from exc
+        raise
 
 
 def _create_token(user_id: str, username: str) -> str:
@@ -116,6 +140,7 @@ async def register(body: RegisterRequest):
         raise HTTPException(status_code=400, detail="用户名和密码不能为空")
     if len(body.password) < 6:
         raise HTTPException(status_code=400, detail="密码至少 6 位")
+    _check_password_length(body.password)
     if await _get_user_by_username(body.username):
         raise HTTPException(status_code=409, detail="用户名已被占用")
     user_id = os.urandom(12).hex()
@@ -128,6 +153,7 @@ async def register(body: RegisterRequest):
 
 @router.post("/login")
 async def login(body: LoginRequest):
+    _check_password_length(body.password)
     user = await _get_user_by_username(body.username)
     if not user or not _verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
