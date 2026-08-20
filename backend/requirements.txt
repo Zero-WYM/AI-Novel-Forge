@@ -15,5 +15,8 @@ pytest>=8.0
 pytest-asyncio>=0.23
 sniffio
 pydantic-settings
-passlib[bcrypt]>=1.7
+# passlib 1.7.4 与 bcrypt>=4.1 不兼容（bcrypt 4.1 移除 __about__，passlib 回退 stub 报
+# stub_requires_backend）。固定 bcrypt==4.0.1（末版带 __about__）确保 passlib 能识别后端。
+passlib==1.7.4
+bcrypt==4.0.1
 PyJWT>=2.8
