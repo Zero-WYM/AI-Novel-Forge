@@ -1,7 +1,9 @@
 FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# 国内服务器从 PyPI 下载极慢，改用清华镜像
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip install --no-cache-dir -r requirements.txt
 COPY . .
 EXPOSE 8000
 # 开发镜像挂载了 ../backend:/app，开启 --reload 才能在宿主机改代码后热更新（否则 bind mount 形同虚设）
