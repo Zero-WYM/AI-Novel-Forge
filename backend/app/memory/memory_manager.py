@@ -9,12 +9,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from sqlalchemy import (
     MetaData, Table, Column, String, Integer, Text, Boolean, DateTime,
-    ForeignKey, JSON,
+    ForeignKey, JSON, select,
 )
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.models.db import engine, SessionLocal
 from app.core.llm_client import LLMClient
+from app.core.runtime_config import ModelSettings
 
 METADATA = MetaData()
 
@@ -31,6 +32,8 @@ t_users = Table(
     Column("id", String, primary_key=True),
     Column("username", String, unique=True, nullable=False, index=True),
     Column("password_hash", String, nullable=False),
+    # B 方案：每用户独立的模型设置（API Key / Base URL / 模型名）；为空则用站点兜底 Key
+    Column("model_settings_json", JSON),
     Column("created_at", DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)),
 )
 
@@ -109,13 +112,51 @@ class MemoryManager:
     def __init__(self, session_factory: async_sessionmaker = SessionLocal):
         self._sf = session_factory
         self._llm: LLMClient | None = None
+        # 路由层注入当前用户的模型设置；LLM 调用优先用它，否则回落站点兜底 Key
+        self.user_model_settings: ModelSettings | None = None
 
     @property
     def llm(self) -> LLMClient:
         """延迟初始化 LLM 客户端，避免只读操作（查角色/伏笔/章节）也要求配置 API Key。"""
         if self._llm is None:
             self._llm = LLMClient()
+        # 每次访问同步最新用户设置（路由层可能在创建 MM 后才设置）
+        self._llm.model_settings = self.user_model_settings
         return self._llm
+
+    # ----------------------------- 用户级模型设置 -----------------------------
+    async def get_user_model_settings(self, uid: str) -> ModelSettings | None:
+        """读取某用户的模型设置；无 Key 或为空返回 None（表示走站点兜底）。"""
+        async with self._sf() as s:
+            row = (await s.execute(
+                select(t_users.c.model_settings_json).where(t_users.c.id == uid))).first()
+        if not row or not row[0]:
+            return None
+        data = row[0]
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                return None
+        if not isinstance(data, dict) or not data.get("api_key"):
+            return None
+        return ModelSettings(
+            api_key=data.get("api_key", ""),
+            base_url=data.get("base_url", ""),
+            model=data.get("model", ""),
+            embed_model=data.get("embed_model", ""),
+        )
+
+    async def save_user_model_settings(self, uid: str, ms: ModelSettings) -> None:
+        """持久化某用户的模型设置（覆盖式）。"""
+        payload = json.dumps(
+            {k: getattr(ms, k) for k in ("api_key", "base_url", "model", "embed_model")},
+            ensure_ascii=False,
+        )
+        async with self._sf() as s:
+            await s.execute(
+                t_users.update().where(t_users.c.id == uid).values(model_settings_json=payload))
+            await s.commit()
 
     # ----------------------------- 写入 -----------------------------
     async def create_novel(self, novel_id: str, data: dict, owner_id: str | None = None) -> None:

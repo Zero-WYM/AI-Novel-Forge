@@ -34,6 +34,7 @@ async def init_db():
         alter_cmds = [
             "ALTER TABLE novels ADD COLUMN IF NOT EXISTS owner_id VARCHAR",
             "ALTER TABLE novels ADD COLUMN IF NOT EXISTS world_settings_json JSON",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS model_settings_json JSON",
             "ALTER TABLE characters ADD COLUMN IF NOT EXISTS level VARCHAR",
             "ALTER TABLE characters ADD COLUMN IF NOT EXISTS mood VARCHAR",
             "ALTER TABLE characters ADD COLUMN IF NOT EXISTS equipment TEXT",

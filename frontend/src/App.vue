@@ -61,6 +61,7 @@
         </li>
         <li>Base URL 与模型名必须匹配同一服务商；不确定时点击下方「常用模型」卡片自动填充</li>
         <li><strong>API Key 留空 = 不修改</strong>，已保存的 Key 不会丢失</li>
+        <li>⚠️ 这是<strong>你的个人模型设置</strong>，仅对你自己生效，其他用户看不到也用不到。不填 Key 则自动使用站点默认 Key（创作消耗记在你自己的 Key 上）。</li>
       </ul>
     </div>
 

@@ -30,8 +30,13 @@ from app.api.auth import require_user
 router = APIRouter(prefix="/api/novel", tags=["novel"], dependencies=[Depends(require_user)])
 
 
-def _mm() -> MemoryManager:
-    return MemoryManager(SessionLocal)
+def _mm(user: dict | None = None) -> MemoryManager:
+    """创建 MemoryManager；若传入 user，则注入其个人模型设置（优先用个人 Key，否则站点兜底）。"""
+    mm = MemoryManager(SessionLocal)
+    if user is not None:
+        from app.core.runtime_config import resolve_user_settings
+        mm.user_model_settings = resolve_user_settings(user)
+    return mm
 
 
 async def _assert_owner(mm: MemoryManager, novel_id: str, user: dict) -> dict:
@@ -46,20 +51,20 @@ async def _assert_owner(mm: MemoryManager, novel_id: str, user: dict) -> dict:
 @router.get("/list", response_model=list[NovelOut])
 async def list_novels(user: dict = Depends(require_user)):
     """列出当前登录用户的小说（按创建时间倒序）。"""
-    return await _mm().list_novels(user["id"])
+    return await _mm(user).list_novels(user["id"])
 
 
 @router.get("/detail", response_model=NovelOut)
 async def get_novel_detail(novel_id: str, user: dict = Depends(require_user)):
     """按 novel_id 查询单本小说详情（标题、类型、设定等），用于恢复 book 上下文。"""
-    return await _assert_owner(_mm(), novel_id, user)
+    return await _assert_owner(_mm(user), novel_id, user)
 
 
 # ----------------------------- 创建小说 -----------------------------
 @router.post("/create", response_model=NovelOut)
 async def create_novel(payload: NovelCreate, user: dict = Depends(require_user)):
     novel_id = uuid.uuid4().hex[:12]
-    await _mm().create_novel(novel_id, payload.model_dump(), owner_id=user["id"])
+    await _mm(user).create_novel(novel_id, payload.model_dump(), owner_id=user["id"])
     return NovelOut(id=novel_id, created_at=datetime.now(timezone.utc).replace(tzinfo=None), **payload.model_dump())
 
 
@@ -77,7 +82,7 @@ def _volumes_from_outline(outline_json) -> list:
 @router.post("/generate-outline", response_model=OutlineGenerateResponse)
 async def generate_outline(payload: OutlineGenerateRequest, user: dict = Depends(require_user)):
     """由 PlotArchitect 生成分卷大纲（含全书总纲）并持久化到 novel.outline_json。"""
-    mm = _mm()
+    mm = _mm(user)
     nov = await _assert_owner(mm, payload.novel_id, user)
     # 2.0：把小说设定注入架构师，避免大纲与设定脱节
     settings = {k: nov.get(k) for k in ("title", "genre", "premise", "style")}
@@ -105,7 +110,7 @@ async def generate_outline(payload: OutlineGenerateRequest, user: dict = Depends
 @router.get("/outline", response_model=OutlineGenerateResponse)
 async def get_outline(novel_id: str, user: dict = Depends(require_user)):
     """读取已持久化的完整大纲（含 total_outline + volumes），供一键成书后展示与刷新恢复。"""
-    nov = await _assert_owner(_mm(), novel_id, user)
+    nov = await _assert_owner(_mm(user), novel_id, user)
     raw = nov.get("outline_json") or {}
     volumes = _volumes_from_outline(raw)
     total = raw.get("total_outline") if isinstance(raw, dict) else None
@@ -120,7 +125,7 @@ async def get_outline(novel_id: str, user: dict = Depends(require_user)):
 @router.post("/generate-world", response_model=WorldGenerateResponse)
 async def generate_world(payload: WorldGenerateRequest, user: dict = Depends(require_user)):
     """由 WorldBuilder 生成结构化世界观：落库 world_settings_json（可查看可手改）+ 写入 RAG world 集合。"""
-    mm = _mm()
+    mm = _mm(user)
     nov = await _assert_owner(mm, payload.novel_id, user)
     wb = WorldBuilder()
     raw = await wb.run_json(
@@ -142,8 +147,8 @@ async def generate_world(payload: WorldGenerateRequest, user: dict = Depends(req
 # ----------------------------- 世界观读取 / 手改 -----------------------------
 @router.get("/world", response_model=WorldSettings)
 async def get_world(novel_id: str, user: dict = Depends(require_user)):
-    await _assert_owner(_mm(), novel_id, user)
-    ws = await _mm().get_world_settings(novel_id)
+    await _assert_owner(_mm(user), novel_id, user)
+    ws = await _mm(user).get_world_settings(novel_id)
     if not ws:
         raise HTTPException(status_code=404, detail="世界观尚未生成")
     return WorldSettings.model_validate(ws)
@@ -152,8 +157,8 @@ async def get_world(novel_id: str, user: dict = Depends(require_user)):
 @router.put("/world", response_model=WorldSettings)
 async def update_world(novel_id: str, payload: WorldSettings, user: dict = Depends(require_user)):
     """作者手动编辑世界观（可查看可改）。"""
-    await _assert_owner(_mm(), novel_id, user)
-    await _mm().save_world_settings(novel_id, payload.model_dump())
+    await _assert_owner(_mm(user), novel_id, user)
+    await _mm(user).save_world_settings(novel_id, payload.model_dump())
     return payload
 
 
@@ -161,7 +166,7 @@ async def update_world(novel_id: str, payload: WorldSettings, user: dict = Depen
 @router.post("/generate-characters", response_model=CharacterGenerateResponse)
 async def generate_characters(payload: CharacterGenerateRequest, user: dict = Depends(require_user)):
     """由 CharacterDesigner 生成结构化人设卡（消费大纲骨架 + 世界观势力/种族），写入 characters 表。"""
-    mm = _mm()
+    mm = _mm(user)
     nov = await _assert_owner(mm, payload.novel_id, user)
     from app.agents.character_designer import CharacterDesigner
     designer = CharacterDesigner()
@@ -185,8 +190,8 @@ async def generate_characters(payload: CharacterGenerateRequest, user: dict = De
 async def generate_chapter(payload: ChapterGenerateRequest, user: dict = Depends(require_user)):
     """由 Coordinator 编排：RAG 上下文 → ChapterWriter → ConflictEditor(四维评分，<24 自动重写≤2次)
     → 落库 → MemoryKeeper(更新角色/伏笔)。"""
-    await _assert_owner(_mm(), payload.novel_id, user)
-    coord = Coordinator(_mm())
+    await _assert_owner(_mm(user), payload.novel_id, user)
+    coord = Coordinator(_mm(user))
     res = await coord.generate_chapter_pipeline(payload.novel_id, payload.chapter_no)
     return ChapterGenerateResponse(
         novel_id=res["novel_id"], chapter_no=res["chapter_no"],
@@ -200,8 +205,8 @@ async def generate_chapter(payload: ChapterGenerateRequest, user: dict = Depends
 @router.post("/bootstrap", response_model=BootstrapResponse)
 async def bootstrap_book(payload: BootstrapRequest, user: dict = Depends(require_user)):
     """Coordinator 创建新书流水线：WorldBuilder → RAG(world) → 两遍式大纲/角色 → 落库。"""
-    await _assert_owner(_mm(), payload.novel_id, user)
-    coord = Coordinator(_mm())
+    await _assert_owner(_mm(user), payload.novel_id, user)
+    coord = Coordinator(_mm(user))
     res = await coord.create_book_pipeline(payload.novel_id)
     return BootstrapResponse(
         novel_id=res["novel_id"], steps=res.get("steps", []),
@@ -213,7 +218,7 @@ async def bootstrap_book(payload: BootstrapRequest, user: dict = Depends(require
 # ----------------------------- 审校章节 -----------------------------
 @router.post("/review-chapter", response_model=ChapterReviewResponse)
 async def review_chapter(payload: ChapterReviewRequest, user: dict = Depends(require_user)):
-    mm = _mm()
+    mm = _mm(user)
     # 必须注入章节正文，否则审校无意义
     await _assert_owner(mm, payload.novel_id, user)
     chapters = await mm.list_chapters(payload.novel_id)
@@ -243,7 +248,7 @@ async def review_chapter(payload: ChapterReviewRequest, user: dict = Depends(req
 @router.post("/update-memory", response_model=MemoryUpdateResponse)
 async def update_memory(payload: MemoryUpdateRequest, user: dict = Depends(require_user)):
     """每章生成后触发：MemoryKeeper 解析章节，更新角色状态、埋设/回收伏笔。"""
-    mm = _mm()
+    mm = _mm(user)
     await _assert_owner(mm, payload.novel_id, user)
     chapters = await mm.list_chapters(payload.novel_id)
     ch = next((c for c in chapters if c.get("chapter_no") == payload.chapter_no), None)
@@ -274,7 +279,7 @@ async def update_memory(payload: MemoryUpdateRequest, user: dict = Depends(requi
 async def update_chapter(novel_id: str, chapter_no: int, payload: ChapterUpdateRequest,
                          user: dict = Depends(require_user)):
     """作者手动编辑已生成章节：更新正文（及可选标题）并写回数据库。"""
-    mm = _mm()
+    mm = _mm(user)
     await _assert_owner(mm, novel_id, user)
     row = await mm.update_chapter(novel_id, chapter_no, payload.content, payload.title)
     if row is None:
@@ -291,14 +296,14 @@ async def update_chapter(novel_id: str, chapter_no: int, payload: ChapterUpdateR
 
 @router.get("/{novel_id}/chapters")
 async def list_chapters(novel_id: str, user: dict = Depends(require_user)):
-    await _assert_owner(_mm(), novel_id, user)
-    return await _mm().list_chapters(novel_id)
+    await _assert_owner(_mm(user), novel_id, user)
+    return await _mm(user).list_chapters(novel_id)
 
 
 @router.get("/{novel_id}/chapter/{chapter_no}", response_model=ChapterGenerateResponse)
 async def get_chapter(novel_id: str, chapter_no: int, user: dict = Depends(require_user)):
     """查询单章详情（供章节页加载已写内容 / 大纲页跳转）。"""
-    mm = _mm()
+    mm = _mm(user)
     await _assert_owner(mm, novel_id, user)
     chapters = await mm.list_chapters(novel_id)
     ch = next((c for c in chapters if c.get("chapter_no") == chapter_no), None)
@@ -313,15 +318,15 @@ async def get_chapter(novel_id: str, chapter_no: int, user: dict = Depends(requi
 
 @router.get("/{novel_id}/foreshadows", response_model=list[ForeshadowItem])
 async def list_foreshadows(novel_id: str, user: dict = Depends(require_user)):
-    await _assert_owner(_mm(), novel_id, user)
-    return [ForeshadowItem(**f) for f in await _mm().list_foreshadows(novel_id)]
+    await _assert_owner(_mm(user), novel_id, user)
+    return [ForeshadowItem(**f) for f in await _mm(user).list_foreshadows(novel_id)]
 
 
 @router.post("/{novel_id}/foreshadow", response_model=ForeshadowItem, status_code=201)
 async def add_foreshadow(novel_id: str, payload: ForeshadowCreate, user: dict = Depends(require_user)):
-    await _assert_owner(_mm(), novel_id, user)
+    await _assert_owner(_mm(user), novel_id, user)
     fid = uuid.uuid4().hex[:12]
-    await _mm().add_foreshadow(novel_id, {
+    await _mm(user).add_foreshadow(novel_id, {
         "id": fid,
         "description": payload.clue,
         "planted_chapter": payload.planted_chapter,
@@ -334,22 +339,22 @@ async def add_foreshadow(novel_id: str, payload: ForeshadowCreate, user: dict = 
 # ----------------------------- 角色状态 -----------------------------
 @router.get("/characters", response_model=list[CharacterState])
 async def get_characters(novel_id: str, user: dict = Depends(require_user)):
-    await _assert_owner(_mm(), novel_id, user)
-    return [CharacterState(**c) for c in await _mm().list_characters(novel_id)]
+    await _assert_owner(_mm(user), novel_id, user)
+    return [CharacterState(**c) for c in await _mm(user).list_characters(novel_id)]
 
 
 @router.put("/characters", response_model=list[CharacterState])
 async def update_characters(novel_id: str, characters: list[CharacterState], user: dict = Depends(require_user)):
     """批量更新角色卡（前端内联编辑后保存）。全量覆盖该小说的所有角色。"""
-    await _assert_owner(_mm(), novel_id, user)
-    await _mm().save_characters(novel_id, [c.model_dump() for c in characters])
-    return [CharacterState(**c) for c in await _mm().list_characters(novel_id)]
+    await _assert_owner(_mm(user), novel_id, user)
+    await _mm(user).save_characters(novel_id, [c.model_dump() for c in characters])
+    return [CharacterState(**c) for c in await _mm(user).list_characters(novel_id)]
 
 
 # ----------------------------- 记忆快照 -----------------------------
 @router.get("/memory", response_model=MemorySnapshot)
 async def get_memory(novel_id: str, user: dict = Depends(require_user)):
-    mm = _mm()
+    mm = _mm(user)
     await _assert_owner(mm, novel_id, user)
     chars = await mm.list_characters(novel_id)
     fores = await mm.list_foreshadows(novel_id, status="open")

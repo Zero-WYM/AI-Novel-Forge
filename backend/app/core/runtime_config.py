@@ -90,3 +90,29 @@ def mask_key(key: str) -> str:
     if len(key) <= 8:
         return "****"
     return key[:4] + "****" + key[-4:]
+
+
+def parse_user_model_settings(user: dict) -> ModelSettings | None:
+    """从 user dict 解析其个人模型设置；无 Key 或为空返回 None。"""
+    raw = user.get("model_settings_json")
+    if not raw:
+        return None
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            return None
+    if not isinstance(raw, dict) or not raw.get("api_key"):
+        return None
+    return ModelSettings(
+        api_key=raw.get("api_key", ""),
+        base_url=raw.get("base_url", ""),
+        model=raw.get("model", ""),
+        embed_model=raw.get("embed_model", ""),
+    )
+
+
+def resolve_user_settings(user: dict) -> ModelSettings:
+    """返回当前用户生效的模型设置：有个人 Key 用个人，否则回落站点兜底（.env / app_config）。"""
+    own = parse_user_model_settings(user)
+    return own if own else get_runtime()

@@ -17,7 +17,7 @@ from openai import OpenAI, RateLimitError
 from fastapi import HTTPException
 
 from app.core.config import settings
-from app.core.runtime_config import get_runtime
+from app.core.runtime_config import get_runtime, ModelSettings
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,14 @@ def _parse_json_response(text: str | None) -> dict | None:
 
 
 class LLMClient:
-    """OpenAI 兼容客户端封装（无状态；配置从 runtime_config 实时读取）。"""
+    """OpenAI 兼容客户端封装（无状态；配置从 runtime_config 实时读取）。
+
+    model_settings 可覆盖默认配置：路由层注入当前用户的个人模型设置后，
+    该用户的所有 LLM 调用都走自己的 Key，互不影响；为 None 时回落站点兜底。
+    """
+
+    def __init__(self, model_settings: ModelSettings | None = None):
+        self.model_settings = model_settings
 
     def _build_params(
         self,
@@ -65,7 +72,7 @@ class LLMClient:
         max_tokens: int = settings.LLM_MAX_TOKENS,
         json_mode: bool = False,
     ) -> dict:
-        cfg = get_runtime()
+        cfg = self.model_settings or get_runtime()
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -89,7 +96,7 @@ class LLMClient:
         max_tokens: int = settings.LLM_MAX_TOKENS,
         json_mode: bool = False,
     ) -> str:
-        cfg = get_runtime()
+        cfg = self.model_settings or get_runtime()
         if not cfg.api_key:
             raise RuntimeError(
                 "未配置模型 API Key，请在前端「模型设置」中填写"
