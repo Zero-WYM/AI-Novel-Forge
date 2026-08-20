@@ -52,6 +52,10 @@ services:
       dockerfile: ../deploy/Dockerfile.frontend.prod
     depends_on:
       - backend
+    # 静态文档：把仓库 docs/architecture.html 只读挂到 web 根，访问 /architecture.html
+    # 纯静态、只读、不碰应用代码与 /api，重建容器也只影响这一个文件
+    volumes:
+      - ../docs/architecture.html:/usr/share/nginx/html/architecture.html:ro
     ports:
       - "80:80"
     restart: unless-stopped

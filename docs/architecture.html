@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-Novel-Forge · 架构与原理图</title>
+<style>
+  :root{ --bg:#f1f5f9; --card:#fff; --ink:#0f172a; --muted:#475569; --line:#e2e8f0; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:system-ui,"Segoe UI","Microsoft YaHei",sans-serif;line-height:1.7}
+  header{background:linear-gradient(135deg,#1e3a8a,#0e7490);color:#fff;padding:32px 24px}
+  header h1{margin:0 0 6px;font-size:26px}
+  header p{margin:0;opacity:.9;font-size:14px}
+  main{max-width:1120px;margin:0 auto;padding:24px 16px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+        padding:20px 22px;margin:22px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .card h2{margin:0 0 14px;font-size:19px;display:flex;align-items:center;gap:10px}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;
+       border-radius:8px;background:#0e7490;color:#fff;font-size:14px;font-weight:700}
+  .fig{background:#fcfcfd;border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  .fig svg{display:block;margin:0 auto;height:auto}
+  .card p{margin:14px 2px 2px;color:var(--muted);font-size:14.5px}
+  .card b{color:#0f172a}
+  footer{max-width:1120px;margin:0 auto;padding:0 16px 40px;color:#64748b;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>AI-Novel-Forge · 架构与原理图</h1>
+  <p>全栈多 Agent 网文自动创作系统 — 系统架构 / 前端 / 后端 / 鉴权隔离 / Agent 协作 / 两条创作流水线 / RAG / 模型隔离 / 生产部署</p>
+</header>
+<main>
+<section class="card">
+<h2><span class="num">01</span>整体系统架构</h2>
+<div class="fig"><svg viewBox="0 0 1000 460" width="100%" preserveAspectRatio="xMidYMid meet" style="max-width:1000px;font-family:system-ui,Segoe UI,Microsoft YaHei,sans-serif">
+<defs>
+<marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+  <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+</marker>
+</defs>
+<rect x="455" y="20" width="560" height="420" rx="14" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 5"/><text x="470" y="42" font-size="12" fill="#64748b" font-weight="700">腾讯云轻量应用服务器（Ubuntu 24.04 · 2核2G3M）</text>
+<line x1="155" y1="230" x2="230" y2="230" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="192" y="226" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">HTTP</text>
+<line x1="430" y1="230" x2="520" y2="230" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="475" y="226" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">/api</text>
+<line x1="690" y1="190" x2="780" y2="145" stroke="#d97706" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="735" y="164" text-anchor="middle" font-size="11" fill="#d97706" font-weight="600">SQL</text>
+<line x1="700" y1="232" x2="775" y2="233" stroke="#d97706" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="738" y="229" text-anchor="middle" font-size="11" fill="#d97706" font-weight="600">向量</text>
+<line x1="684" y1="270" x2="785" y2="325" stroke="#7c3aed" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="735" y="294" text-anchor="middle" font-size="11" fill="#7c3aed" font-weight="600">LLM 调用</text>
+<g>
+<rect x="25" y="190" width="130" height="80" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="90" y="225" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">用户浏览器</text>
+<text x="90" y="245" text-anchor="middle" font-size="11" fill="#475569">Vue3 SPA</text>
+</g>
+<g>
+<rect x="230" y="165" width="200" height="130" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="330" y="225" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">nginx（前端容器）</text>
+<text x="330" y="245" text-anchor="middle" font-size="11" fill="#475569">静态托管 + /api 同源反代</text>
+</g>
+<g>
+<rect x="520" y="190" width="180" height="80" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="610" y="225" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">后端 FastAPI</text>
+<text x="610" y="245" text-anchor="middle" font-size="11" fill="#475569">uvicorn :8000</text>
+</g>
+<g>
+<rect x="775" y="75" width="150" height="70" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="850" y="105" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">PostgreSQL</text>
+<text x="850" y="125" text-anchor="middle" font-size="11" fill="#475569">novels/users/chapters</text>
+</g>
+<g>
+<rect x="775" y="200" width="150" height="70" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="850" y="230" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Chroma</text>
+<text x="850" y="250" text-anchor="middle" font-size="11" fill="#475569">RAG 向量库</text>
+</g>
+<g>
+<rect x="775" y="325" width="150" height="70" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="850" y="355" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">智谱 GLM</text>
+<text x="850" y="375" text-anchor="middle" font-size="11" fill="#475569">OpenAI 兼容</text>
+</g>
+</svg></div>
+<p>最上层是用户通过浏览器访问。前端是 Vue3 单页应用，由 nginx 在同一容器内托管静态文件，并把 <b>/api</b> 请求同源反代到后端（免 CORS）。后端 FastAPI 负责业务编排，持久化数据落在 PostgreSQL（小说/用户/章节等结构化数据），检索增强（RAG）数据落在 Chroma 向量库，创作能力依赖智谱 GLM（通过 OpenAI 兼容协议调用）。整套服务跑在腾讯云轻量服务器的一个 Docker Compose 里。</p>
+</section>
+<section class="card">
+<h2><span class="num">02</span>前端技术栈与结构</h2>
+<div class="fig"><svg viewBox="0 0 1040 460" width="100%" preserveAspectRatio="xMidYMid meet" style="max-width:1040px;font-family:system-ui,Segoe UI,Microsoft YaHei,sans-serif">
+<defs>
+<marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+  <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+</marker>
+</defs>
+<line x1="394" y1="66" x2="255" y2="110" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="460" y1="66" x2="460" y2="110" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="526" y1="66" x2="665" y2="110" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="705" y1="170" x2="611" y2="222" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="746" y1="170" x2="723" y2="222" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="787" y1="170" x2="835" y2="222" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="728" y1="170" x2="589" y2="302" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="752" y1="170" x2="717" y2="302" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="411" y1="170" x2="252" y2="268" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="168" y1="170" x2="192" y2="268" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="660" y1="169" x2="300" y2="271" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="200" y1="332" x2="200" y2="372" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="165" y1="170" x2="196" y2="372" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="200" y1="228" x2="200" y2="372" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="200" y1="228" x2="200" y2="268" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<g>
+<rect x="330" y="24" width="260" height="42" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="460" y="40" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Vue3 应用 (main.js)</text>
+<text x="460" y="60" text-anchor="middle" font-size="11" fill="#475569">vue-router + pinia</text>
+</g>
+<g>
+<rect x="60" y="110" width="200" height="60" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="160" y="135" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">登录 / 注册页</text>
+<text x="160" y="155" text-anchor="middle" font-size="11" fill="#475569">JWT 登录态</text>
+</g>
+<g>
+<rect x="360" y="110" width="200" height="60" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="460" y="135" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">小说列表页</text>
+<text x="460" y="155" text-anchor="middle" font-size="11" fill="#475569">创建 / 进入</text>
+</g>
+<g>
+<rect x="660" y="110" width="200" height="60" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="760" y="135" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">小说工作台</text>
+<text x="760" y="155" text-anchor="middle" font-size="11" fill="#475569">创作主界面</text>
+</g>
+<g>
+<rect x="485" y="222" width="150" height="56" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+<text x="560" y="245" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">大纲视图</text>
+<text x="560" y="265" text-anchor="middle" font-size="11" fill="#475569">分卷大纲</text>
+</g>
+<g>
+<rect x="635" y="222" width="150" height="56" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+<text x="710" y="245" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">世界观视图</text>
+<text x="710" y="265" text-anchor="middle" font-size="11" fill="#475569">势力/地图</text>
+</g>
+<g>
+<rect x="785" y="222" width="150" height="56" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+<text x="860" y="245" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">角色视图</text>
+<text x="860" y="265" text-anchor="middle" font-size="11" fill="#475569">人设卡</text>
+</g>
+<g>
+<rect x="485" y="302" width="150" height="56" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+<text x="560" y="325" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">章节写作</text>
+<text x="560" y="345" text-anchor="middle" font-size="11" fill="#475569">逐章生成</text>
+</g>
+<g>
+<rect x="635" y="302" width="150" height="56" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+<text x="710" y="325" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">记忆/伏笔</text>
+<text x="710" y="345" text-anchor="middle" font-size="11" fill="#475569">跨章追踪</text>
+</g>
+<g>
+<rect x="100" y="268" width="200" height="64" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="200" y="295" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">api.js (axios)</text>
+<text x="200" y="315" text-anchor="middle" font-size="11" fill="#475569">统一请求/拦截</text>
+</g>
+<g>
+<rect x="100" y="372" width="200" height="56" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="200" y="395" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">auth 状态 (pinia)</text>
+<text x="200" y="415" text-anchor="middle" font-size="11" fill="#475569">token 持久化</text>
+</g>
+<g>
+<rect x="100" y="172" width="200" height="56" rx="9" fill="#fee2e2" stroke="#dc2626" stroke-width="1.6"/>
+<text x="200" y="195" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">模型设置弹窗</text>
+<text x="200" y="215" text-anchor="middle" font-size="11" fill="#475569">个人 Key</text>
+</g>
+</svg></div>
+<p>前端基于 Vue3 + Pinia + Vue Router + Element Plus + axios。路由分三层：登录/注册页、小说列表页、小说工作台。工作台内聚了<b>大纲 / 世界观 / 角色 / 章节 / 记忆伏笔</b>五个创作视图，所有网络请求统一走 <b>api.js</b>（axios 实例 + 响应拦截器做中文友好报错）。登录态 token 由 pinia 持久化，「模型设置」弹窗供用户配置<b>个人专属模型 Key</b>（仅自己生效）。</p>
+</section>
+<section class="card">
+<h2><span class="num">03</span>后端模块结构</h2>
+<div class="fig"><svg viewBox="0 0 1040 520" width="100%" preserveAspectRatio="xMidYMid meet" style="max-width:1040px;font-family:system-ui,Segoe UI,Microsoft YaHei,sans-serif">
+<defs>
+<marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+  <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+</marker>
+</defs>
+<line x1="425" y1="67" x2="236" y2="122" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="475" y1="67" x2="412" y2="122" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="525" y1="67" x2="588" y2="122" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="575" y1="67" x2="764" y2="122" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="236" y1="178" x2="397" y2="225" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="412" y1="178" x2="466" y2="225" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="588" y1="178" x2="534" y2="225" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="764" y1="178" x2="603" y2="225" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="500" y1="285" x2="500" y2="332" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="409" y1="285" x2="265" y2="332" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="591" y1="285" x2="735" y2="332" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="726" y1="388" x2="594" y2="427" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="290" y1="360" x2="710" y2="360" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<g>
+<rect x="380" y="23" width="240" height="44" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="500" y="40" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">main.py (FastAPI 入口)</text>
+<text x="500" y="60" text-anchor="middle" font-size="11" fill="#475569">lifespan: 建表+load_runtime</text>
+</g>
+<g>
+<rect x="40" y="122" width="200" height="56" rx="9" fill="#fee2e2" stroke="#dc2626" stroke-width="1.6"/>
+<text x="140" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">api/auth.py</text>
+<text x="140" y="165" text-anchor="middle" font-size="11" fill="#475569">注册/登录/JWT</text>
+</g>
+<g>
+<rect x="280" y="122" width="200" height="56" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="380" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">api/novel.py</text>
+<text x="380" y="165" text-anchor="middle" font-size="11" fill="#475569">小说/大纲/章节/角色</text>
+</g>
+<g>
+<rect x="520" y="122" width="200" height="56" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="620" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">api/rag_query.py</text>
+<text x="620" y="165" text-anchor="middle" font-size="11" fill="#475569">RAG 查询接口</text>
+</g>
+<g>
+<rect x="760" y="122" width="200" height="56" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="860" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">api/config.py</text>
+<text x="860" y="165" text-anchor="middle" font-size="11" fill="#475569">模型设置读写</text>
+</g>
+<g>
+<rect x="380" y="225" width="240" height="60" rx="9" fill="#cffafe" stroke="#0891b2" stroke-width="1.6"/>
+<text x="500" y="250" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">services/coordinator.py</text>
+<text x="500" y="270" text-anchor="middle" font-size="11" fill="#475569">多 Agent 编排器</text>
+</g>
+<g>
+<rect x="320" y="332" width="360" height="56" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="500" y="355" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">agents/ ×6</text>
+<text x="500" y="375" text-anchor="middle" font-size="11" fill="#475569">WorldBuilder·PlotArchitect·CharacterDesigner·ChapterWriter·ConflictEditor·MemoryKeeper</text>
+</g>
+<g>
+<rect x="70" y="332" width="220" height="56" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="180" y="355" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">core/</text>
+<text x="180" y="375" text-anchor="middle" font-size="11" fill="#475569">llm_client · runtime_config</text>
+</g>
+<g>
+<rect x="710" y="332" width="220" height="56" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="820" y="355" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">memory/memory_manager</text>
+<text x="820" y="375" text-anchor="middle" font-size="11" fill="#475569">Postgres + Chroma</text>
+</g>
+<g>
+<rect x="390" y="427" width="220" height="56" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="500" y="450" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">models/db.py</text>
+<text x="500" y="470" text-anchor="middle" font-size="11" fill="#475569">SQLAlchemy Core 表定义</text>
+</g>
+</svg></div>
+<p>后端以 FastAPI 组织：<b>main.py</b> 在启动时建表并加载全局运行配置；四个路由模块分别负责鉴权、小说业务、RAG 查询、模型设置。所有重活都经由 <b>Coordinator</b> 编排，它调度 6 个 Agent 完成创作，底层依赖 <b>core</b>（LLM 客户端与运行时配置解析）和 <b>memory_manager</b>（同时封装 PostgreSQL 结构化存储与 Chroma 向量存储）。数据库表结构由 <b>models/db.py</b> 用 SQLAlchemy Core 定义。</p>
+</section>
+<section class="card">
+<h2><span class="num">04</span>鉴权与数据隔离原理（B 方案）</h2>
+<div class="fig"><svg viewBox="0 0 1100 410" width="100%" preserveAspectRatio="xMidYMid meet" style="max-width:1100px;font-family:system-ui,Segoe UI,Microsoft YaHei,sans-serif">
+<defs>
+<marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+  <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+</marker>
+</defs>
+<rect x="40" y="20" width="1040" height="370" rx="14" fill="#f8fafc" stroke="#cbd5e1"/><text x="60" y="44" font-size="12" fill="#64748b" font-weight="700">B 方案：独立账号 + 数据隔离</text>
+<line x1="150" y1="100" x2="150" y2="270" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="150" y1="210" x2="150" y2="270" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="260" y1="180" x2="405" y2="180" stroke="#dc2626" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="332" y="176" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="600">返回 token</text>
+<line x1="520" y1="210" x2="520" y2="270" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="635" y1="300" x2="700" y2="300" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="820" y1="270" x2="820" y2="210" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="260" y1="300" x2="405" y2="300" stroke="#dc2626" stroke-width="1.6" marker-end="url(#arw)"/>
+<g>
+<rect x="40" y="40" width="220" height="60" rx="9" fill="#fee2e2" stroke="#dc2626" stroke-width="1.6"/>
+<text x="150" y="65" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">注册</text>
+<text x="150" y="85" text-anchor="middle" font-size="11" fill="#475569">密码→bcrypt 哈希</text>
+</g>
+<g>
+<rect x="40" y="150" width="220" height="60" rx="9" fill="#fee2e2" stroke="#dc2626" stroke-width="1.6"/>
+<text x="150" y="175" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">登录</text>
+<text x="150" y="195" text-anchor="middle" font-size="11" fill="#475569">校验→签发 JWT(30天)</text>
+</g>
+<g>
+<rect x="40" y="270" width="220" height="60" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="150" y="295" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">users 表</text>
+<text x="150" y="315" text-anchor="middle" font-size="11" fill="#475569">id·username·hash·model_settings_json</text>
+</g>
+<g>
+<rect x="405" y="150" width="230" height="60" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+<text x="520" y="175" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">业务请求</text>
+<text x="520" y="195" text-anchor="middle" font-size="11" fill="#475569">Header: Bearer <JWT></text>
+</g>
+<g>
+<rect x="405" y="270" width="230" height="60" rx="9" fill="#fee2e2" stroke="#dc2626" stroke-width="1.6"/>
+<text x="520" y="295" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">require_user 依赖</text>
+<text x="520" y="315" text-anchor="middle" font-size="11" fill="#475569">解 JWT→uid→查用户</text>
+</g>
+<g>
+<rect x="700" y="270" width="240" height="60" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="820" y="295" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">owner_id 行级过滤</text>
+<text x="820" y="315" text-anchor="middle" font-size="11" fill="#475569">只查本人数据</text>
+</g>
+<g>
+<rect x="700" y="150" width="240" height="60" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="820" y="175" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">novels / chapters 等</text>
+<text x="820" y="195" text-anchor="middle" font-size="11" fill="#475569">均含 owner_id 列</text>
+</g>
+</svg></div>
+<p>采用「独立账号 + 数据隔离」方案（B 方案）。<b>注册</b>时密码经 bcrypt 哈希存入 users 表；<b>登录</b>校验后签发有效期 30 天的 JWT（HS256）。此后每个业务请求在 Header 携带 Bearer Token，后端 <b>require_user</b> 依赖统一解析出用户身份。所有小说相关查询都强制按 <b>owner_id</b> 过滤，任何用户只能看到和操作自己的数据——这是行级隔离，外人即便知道 ID 也会拿到 404。</p>
+</section>
+<section class="card">
+<h2><span class="num">05</span>多 Agent 协作全景</h2>
+<div class="fig"><svg viewBox="0 0 1100 560" width="100%" preserveAspectRatio="xMidYMid meet" style="max-width:1100px;font-family:system-ui,Segoe UI,Microsoft YaHei,sans-serif">
+<defs>
+<marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+  <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+</marker>
+</defs>
+<rect x="60" y="40" width="200" height="64" rx="9" fill="#f1f5f9" stroke="#cbd5e1"/><text x="160" y="68" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">创建流水线</text><text x="160" y="86" text-anchor="middle" font-size="11" fill="#64748b">bootstrap</text><rect x="740" y="420" width="200" height="64" rx="9" fill="#f1f5f9" stroke="#cbd5e1"/><text x="840" y="448" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">写作流水线</text><text x="840" y="466" text-anchor="middle" font-size="11" fill="#64748b">generate-chapter</text>
+<line x1="270" y1="90" x2="390" y2="90" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="330" y="86" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">世界观</text>
+<line x1="610" y1="90" x2="730" y2="90" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="670" y="86" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">大纲骨架</text>
+<line x1="730" y1="90" x2="610" y2="90" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="670" y="86" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">人设卡→细化</text>
+<line x1="500" y1="122" x2="500" y2="245" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="217" y1="122" x2="437" y2="245" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="783" y1="122" x2="563" y2="245" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="270" y1="470" x2="390" y2="470" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="330" y="466" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">草稿</text>
+<line x1="390" y1="470" x2="270" y2="470" stroke="#dc2626" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="330" y="466" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="600">重写意见</text>
+<line x1="610" y1="470" x2="730" y2="470" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="670" y="466" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">定稿章节</text>
+<line x1="437" y1="315" x2="217" y2="438" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="563" y1="315" x2="783" y2="438" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<g>
+<rect x="380" y="245" width="240" height="70" rx="9" fill="#cffafe" stroke="#0891b2" stroke-width="1.6"/>
+<text x="500" y="275" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Coordinator 编排器</text>
+<text x="500" y="295" text-anchor="middle" font-size="11" fill="#475569">调度 + 重试 + 落库</text>
+</g>
+<g>
+<rect x="50" y="58" width="220" height="64" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="160" y="85" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">WorldBuilder</text>
+<text x="160" y="105" text-anchor="middle" font-size="11" fill="#475569">生成结构化世界观</text>
+</g>
+<g>
+<rect x="390" y="58" width="220" height="64" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="500" y="85" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">PlotArchitect</text>
+<text x="500" y="105" text-anchor="middle" font-size="11" fill="#475569">两遍式大纲(骨架→细化)</text>
+</g>
+<g>
+<rect x="730" y="58" width="220" height="64" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="840" y="85" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">CharacterDesigner</text>
+<text x="840" y="105" text-anchor="middle" font-size="11" fill="#475569">人设卡(消费大纲+世界)</text>
+</g>
+<g>
+<rect x="50" y="438" width="220" height="64" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="160" y="465" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">ChapterWriter</text>
+<text x="160" y="485" text-anchor="middle" font-size="11" fill="#475569">依据上下文写章节</text>
+</g>
+<g>
+<rect x="390" y="438" width="220" height="64" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="500" y="465" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">ConflictEditor</text>
+<text x="500" y="485" text-anchor="middle" font-size="11" fill="#475569">四维评分·<24 打回重写</text>
+</g>
+<g>
+<rect x="730" y="438" width="220" height="64" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="840" y="465" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">MemoryKeeper</text>
+<text x="840" y="485" text-anchor="middle" font-size="11" fill="#475569">更新角色/埋伏笔</text>
+</g>
+</svg></div>
+<p>6 个 Agent 围绕 Coordinator 协作，分两条流水线：<br>• <b>创建流水线（一键成书）</b>：WorldBuilder 出世界观 → PlotArchitect Pass-1 出大纲骨架 → CharacterDesigner 出人设卡 → PlotArchitect Pass-2 细化大纲（大纲跟随角色）。<br>• <b>写作流水线（逐章）</b>：ChapterWriter 写草稿 → ConflictEditor 做四维评分，不达标（<24/40）则把意见回灌重写（≤2 次） → 定稿后 MemoryKeeper 更新角色状态、埋设/回收伏笔。</p>
+</section>
+<section class="card">
+<h2><span class="num">06</span>一键成书流水线原理</h2>
+<div class="fig"><svg viewBox="0 0 1040 480" width="100%" preserveAspectRatio="xMidYMid meet" style="max-width:1040px;font-family:system-ui,Segoe UI,Microsoft YaHei,sans-serif">
+<defs>
+<marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+  <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+</marker>
+</defs>
+<rect x="20" y="100" width="1000" height="380" rx="14" fill="none" stroke="#cbd5e1" stroke-dasharray="6 5"/><text x="36" y="122" font-size="12" fill="#64748b" font-weight="700">串行 4 次 LLM 调用 · 步间 sleep(3s) 规避智谱 429 限流 · 整段同步阻塞（≈数分钟）</text>
+<line x1="165" y1="280" x2="185" y2="280" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="270" y1="315" x2="270" y2="372" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="317" y1="372" x2="412" y2="315" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="364" y="340" text-anchor="middle" font-size="11" fill="#475569" font-weight="600">sleep 3s</text>
+<line x1="555" y1="280" x2="575" y2="280" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="565" y="276" text-anchor="middle" font-size="11" fill="#475569" font-weight="600">sleep 3s</text>
+<line x1="745" y1="280" x2="765" y2="280" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="755" y="276" text-anchor="middle" font-size="11" fill="#475569" font-weight="600">sleep 3s</text>
+<line x1="850" y1="315" x2="850" y2="372" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="850" y1="245" x2="850" y2="168" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<g>
+<rect x="15" y="250" width="150" height="60" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="90" y="275" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">接收请求</text>
+<text x="90" y="295" text-anchor="middle" font-size="11" fill="#475569">novel_id + owner校验</text>
+</g>
+<g>
+<rect x="185" y="245" width="170" height="70" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="270" y="275" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">① WorldBuilder</text>
+<text x="270" y="295" text-anchor="middle" font-size="11" fill="#475569">世界观 JSON</text>
+</g>
+<g>
+<rect x="185" y="372" width="170" height="56" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="270" y="395" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">写 RAG(world)</text>
+<text x="270" y="415" text-anchor="middle" font-size="11" fill="#475569">嵌入→Chroma</text>
+</g>
+<g>
+<rect x="385" y="245" width="170" height="70" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="470" y="275" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">② PlotArchitect</text>
+<text x="470" y="295" text-anchor="middle" font-size="11" fill="#475569">Pass-1 大纲骨架</text>
+</g>
+<g>
+<rect x="575" y="245" width="170" height="70" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="660" y="275" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">③ CharacterDesigner</text>
+<text x="660" y="295" text-anchor="middle" font-size="11" fill="#475569">人设卡</text>
+</g>
+<g>
+<rect x="765" y="245" width="170" height="70" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="850" y="275" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">④ PlotArchitect</text>
+<text x="850" y="295" text-anchor="middle" font-size="11" fill="#475569">Pass-2 细化大纲</text>
+</g>
+<g>
+<rect x="765" y="372" width="170" height="56" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="850" y="395" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">落库</text>
+<text x="850" y="415" text-anchor="middle" font-size="11" fill="#475569">outline/characters</text>
+</g>
+<g>
+<rect x="775" y="112" width="150" height="56" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+<text x="850" y="135" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">返回结果</text>
+<text x="850" y="155" text-anchor="middle" font-size="11" fill="#475569">steps/计数</text>
+</g>
+</svg></div>
+<p>「一键成书」由 Coordinator.create_book_pipeline 同步串行执行 4 次大模型调用：① WorldBuilder 生成世界观并写入 RAG；② PlotArchitect Pass-1 产出大纲骨架；③ CharacterDesigner 依据大纲+世界观产出人设卡；④ PlotArchitect Pass-2 消费人设卡细化大纲。每步之间 sleep(3s) 缓冲，避免突发请求撞智谱 429 限流。整段在单个 HTTP 请求内同步完成，因此前端设了 600s 超时。（这也是当前瓶颈：串行 + 大模型慢，治本方案是改异步任务 + 进度轮询。）</p>
+</section>
+<section class="card">
+<h2><span class="num">07</span>单章生成流水线原理</h2>
+<div class="fig"><svg viewBox="0 0 1040 560" width="100%" preserveAspectRatio="xMidYMid meet" style="max-width:1040px;font-family:system-ui,Segoe UI,Microsoft YaHei,sans-serif">
+<defs>
+<marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+  <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+</marker>
+</defs>
+<rect x="30" y="190" width="980" height="360" rx="14" fill="#f8fafc" stroke="#cbd5e1"/>
+<line x1="185" y1="250" x2="230" y2="250" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="160" y1="330" x2="250" y2="285" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="410" y1="250" x2="470" y2="250" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="560" y1="285" x2="560" y2="352" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="612" y1="352" x2="735" y2="285" stroke="#059669" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="674" y="314" text-anchor="middle" font-size="11" fill="#059669" font-weight="600">是</text>
+<line x1="560" y1="408" x2="560" y2="452" stroke="#dc2626" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="560" y="426" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="600">否</text>
+<line x1="531" y1="452" x2="357" y2="285" stroke="#dc2626" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="444" y="364" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="600">重写</text>
+<line x1="800" y1="285" x2="800" y2="352" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<g>
+<rect x="15" y="220" width="170" height="60" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+<text x="100" y="245" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">构建上下文</text>
+<text x="100" y="265" text-anchor="middle" font-size="11" fill="#475569">novel+大纲+记忆</text>
+</g>
+<g>
+<rect x="15" y="330" width="170" height="60" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="100" y="355" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">RAG 检索</text>
+<text x="100" y="375" text-anchor="middle" font-size="11" fill="#475569">retrieve_for_generation</text>
+</g>
+<g>
+<rect x="230" y="215" width="180" height="70" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="320" y="245" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">ChapterWriter</text>
+<text x="320" y="265" text-anchor="middle" font-size="11" fill="#475569">依据上下文写草稿</text>
+</g>
+<g>
+<rect x="470" y="215" width="180" height="70" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="560" y="245" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">ConflictEditor</text>
+<text x="560" y="265" text-anchor="middle" font-size="11" fill="#475569">四维评分(满分40)</text>
+</g>
+<g>
+<rect x="480" y="352" width="160" height="56" rx="9" fill="#cffafe" stroke="#0891b2" stroke-width="1.6"/>
+<text x="560" y="375" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">≥24 ?</text>
+<text x="560" y="395" text-anchor="middle" font-size="11" fill="#475569">达标则通过</text>
+</g>
+<g>
+<rect x="460" y="452" width="200" height="56" rx="9" fill="#fee2e2" stroke="#dc2626" stroke-width="1.6"/>
+<text x="560" y="475" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">回灌重写(≤2次)</text>
+<text x="560" y="495" text-anchor="middle" font-size="11" fill="#475569">注入审校意见</text>
+</g>
+<g>
+<rect x="710" y="215" width="180" height="70" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="800" y="245" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">落库 + 写 RAG</text>
+<text x="800" y="265" text-anchor="middle" font-size="11" fill="#475569">save_chapter</text>
+</g>
+<g>
+<rect x="710" y="352" width="180" height="56" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="800" y="375" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">MemoryKeeper</text>
+<text x="800" y="395" text-anchor="middle" font-size="11" fill="#475569">角色/伏笔更新</text>
+</g>
+</svg></div>
+<p>逐章写作流水线：先构建章节上下文并做 RAG 检索，ChapterWriter 据此写出草稿；ConflictEditor 对草稿做四维评分（满分 40），<b>总分 ≥24 视为达标</b>，否则把审校意见回灌给 ChapterWriter 重写（最多 2 次）。达标后章节落库并写入 RAG（供后续章节跨章召回），最后 MemoryKeeper 更新角色状态、埋设或回收伏笔，形成长线一致性。</p>
+</section>
+<section class="card">
+<h2><span class="num">08</span>RAG 检索增强原理</h2>
+<div class="fig"><svg viewBox="0 0 1000 410" width="100%" preserveAspectRatio="xMidYMid meet" style="max-width:1000px;font-family:system-ui,Segoe UI,Microsoft YaHei,sans-serif">
+<defs>
+<marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+  <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+</marker>
+</defs>
+<rect x="40" y="40" width="940" height="120" rx="14" fill="#f8fafc" stroke="#cbd5e1"/><text x="60" y="64" font-size="12" fill="#64748b" font-weight="700">写入阶段（离线/生成后）</text><rect x="40" y="280" width="940" height="130" rx="14" fill="#f8fafc" stroke="#cbd5e1"/><text x="60" y="304" font-size="12" fill="#64748b" font-weight="700">读取阶段（生成时，RAG 增强）</text>
+<line x1="230" y1="109" x2="320" y2="126" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="230" y1="181" x2="320" y2="164" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="520" y1="127" x2="610" y2="110" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="565" y="114" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">写入</text>
+<line x1="520" y1="163" x2="610" y2="180" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="565" y="168" text-anchor="middle" font-size="11" fill="#64748b" font-weight="600">写入</text>
+<line x1="682" y1="120" x2="458" y2="300" stroke="#d97706" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="570" y="206" text-anchor="middle" font-size="11" fill="#d97706" font-weight="600">检索</text>
+<line x1="651" y1="230" x2="489" y2="300" stroke="#d97706" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="570" y="261" text-anchor="middle" font-size="11" fill="#d97706" font-weight="600">检索</text>
+<line x1="530" y1="330" x2="600" y2="330" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<g>
+<rect x="30" y="60" width="200" height="60" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="130" y="85" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">世界观生成</text>
+<text x="130" y="105" text-anchor="middle" font-size="11" fill="#475569">WorldBuilder</text>
+</g>
+<g>
+<rect x="30" y="170" width="200" height="60" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="130" y="195" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">章节生成</text>
+<text x="130" y="215" text-anchor="middle" font-size="11" fill="#475569">ChapterWriter</text>
+</g>
+<g>
+<rect x="320" y="115" width="200" height="60" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="420" y="140" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">嵌入模型</text>
+<text x="420" y="160" text-anchor="middle" font-size="11" fill="#475569">文本→向量</text>
+</g>
+<g>
+<rect x="610" y="60" width="220" height="60" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="720" y="85" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Chroma: world 集合</text>
+<text x="720" y="105" text-anchor="middle" font-size="11" fill="#475569">势力/地图/设定</text>
+</g>
+<g>
+<rect x="610" y="170" width="220" height="60" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="720" y="195" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Chroma: chapter 集合</text>
+<text x="720" y="215" text-anchor="middle" font-size="11" fill="#475569">章节正文</text>
+</g>
+<g>
+<rect x="310" y="300" width="220" height="60" rx="9" fill="#cffafe" stroke="#0891b2" stroke-width="1.6"/>
+<text x="420" y="325" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">生成时检索</text>
+<text x="420" y="345" text-anchor="middle" font-size="11" fill="#475569">retrieve_for_generation</text>
+</g>
+<g>
+<rect x="600" y="300" width="240" height="60" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="720" y="325" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">注入 Prompt</text>
+<text x="720" y="345" text-anchor="middle" font-size="11" fill="#475569">相关上下文</text>
+</g>
+</svg></div>
+<p>RAG（检索增强生成）分两阶段：<b>写入</b>时，世界观条目与章节正文经嵌入模型转成向量，分别存入 Chroma 的 world / chapter 两个集合；<b>读取</b>时，章节生成前调用 retrieve_for_generation 从两个集合召回最相关上下文，拼进 Prompt，让模型「记得」前文设定与剧情，减少人设崩坏和设定矛盾。</p>
+</section>
+<section class="card">
+<h2><span class="num">09</span>每用户模型 Key 隔离原理</h2>
+<div class="fig"><svg viewBox="0 0 1080 410" width="100%" preserveAspectRatio="xMidYMid meet" style="max-width:1080px;font-family:system-ui,Segoe UI,Microsoft YaHei,sans-serif">
+<defs>
+<marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+  <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+</marker>
+</defs>
+<line x1="185" y1="200" x2="240" y2="200" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="460" y1="166" x2="543" y2="140" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="640" y1="140" x2="640" y2="190" stroke="#059669" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="640" y="161" text-anchor="middle" font-size="11" fill="#059669" font-weight="600">有</text>
+<line x1="640" y1="140" x2="640" y2="300" stroke="#d97706" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="640" y="216" text-anchor="middle" font-size="11" fill="#d97706" font-weight="600">无</text>
+<line x1="750" y1="220" x2="845" y2="220" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="716" y1="300" x2="845" y2="249" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<g>
+<rect x="15" y="170" width="170" height="60" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+<text x="100" y="195" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">请求到达</text>
+<text x="100" y="215" text-anchor="middle" font-size="11" fill="#475569">带 JWT(user)</text>
+</g>
+<g>
+<rect x="240" y="165" width="220" height="70" rx="9" fill="#cffafe" stroke="#0891b2" stroke-width="1.6"/>
+<text x="350" y="195" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">resolve_user_settings</text>
+<text x="350" y="215" text-anchor="middle" font-size="11" fill="#475569">解析个人设置</text>
+</g>
+<g>
+<rect x="530" y="80" width="220" height="60" rx="9" fill="#fee2e2" stroke="#dc2626" stroke-width="1.6"/>
+<text x="640" y="105" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">有个人 Key ?</text>
+<text x="640" y="125" text-anchor="middle" font-size="11" fill="#475569">查 model_settings_json</text>
+</g>
+<g>
+<rect x="530" y="190" width="220" height="60" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="640" y="215" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">用个人 Key+模型</text>
+<text x="640" y="235" text-anchor="middle" font-size="11" fill="#475569">仅自己生效</text>
+</g>
+<g>
+<rect x="530" y="300" width="220" height="60" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="640" y="325" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">回落站点兜底</text>
+<text x="640" y="345" text-anchor="middle" font-size="11" fill="#475569">.env ZHIPU_API_KEY</text>
+</g>
+<g>
+<rect x="845" y="185" width="150" height="70" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="920" y="215" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">LLMClient</text>
+<text x="920" y="235" text-anchor="middle" font-size="11" fill="#475569">发起调用</text>
+</g>
+</svg></div>
+<p>为避免「一人填错 Key 炸全站」，模型调用走 <b>resolve_user_settings</b> 解析：优先使用<b>用户个人</b>在「模型设置」里填的 Key 与模型（存于 users.model_settings_json，仅自己生效）；若未填，则回落到站点级兜底 Key（来自 .env 的 ZHIPU_API_KEY）。解析结果注入 LLMClient，因此 A 用户填错只影响 A 自己，不会波及他人。</p>
+</section>
+<section class="card">
+<h2><span class="num">10</span>生产部署架构</h2>
+<div class="fig"><svg viewBox="0 0 1060 500" width="100%" preserveAspectRatio="xMidYMid meet" style="max-width:1060px;font-family:system-ui,Segoe UI,Microsoft YaHei,sans-serif">
+<defs>
+<marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+  <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+</marker>
+</defs>
+<rect x="60" y="250" width="920" height="250" rx="14" fill="#f8fafc" stroke="#cbd5e1"/><text x="78" y="272" font-size="12" fill="#64748b" font-weight="700">容器与持久化卷（重启/重建不丢数据）</text>
+<line x1="500" y1="85" x2="500" y2="135" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="443" y1="185" x2="260" y2="265" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="500" y1="185" x2="500" y2="265" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="557" y1="185" x2="740" y2="265" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="500" y1="335" x2="500" y2="390" stroke="#64748b" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="820" y1="265" x2="820" y2="188" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arw)"/>
+<line x1="820" y1="188" x2="820" y2="265" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arw)"/>
+<text x="820" y="222" text-anchor="middle" font-size="11" fill="#2563eb" font-weight="600">HTTP</text>
+<g>
+<rect x="360" y="35" width="280" height="50" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+<text x="500" y="55" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">腾讯云轻量应用服务器</text>
+<text x="500" y="75" text-anchor="middle" font-size="11" fill="#475569">Ubuntu 24.04 · 公网 IP</text>
+</g>
+<g>
+<rect x="320" y="135" width="360" height="50" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+<text x="500" y="155" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Docker Compose</text>
+<text x="500" y="175" text-anchor="middle" font-size="11" fill="#475569">restart: unless-stopped</text>
+</g>
+<g>
+<rect x="70" y="265" width="220" height="70" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="180" y="295" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">postgres:16</text>
+<text x="180" y="315" text-anchor="middle" font-size="11" fill="#475569">pgdata 命名卷</text>
+</g>
+<g>
+<rect x="390" y="265" width="220" height="70" rx="9" fill="#d1fae5" stroke="#059669" stroke-width="1.6"/>
+<text x="500" y="295" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">backend (FastAPI)</text>
+<text x="500" y="315" text-anchor="middle" font-size="11" fill="#475569">uvicorn :8000</text>
+</g>
+<g>
+<rect x="710" y="265" width="220" height="70" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="820" y="295" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">frontend (nginx)</text>
+<text x="820" y="315" text-anchor="middle" font-size="11" fill="#475569">暴露 80 端口</text>
+</g>
+<g>
+<rect x="390" y="390" width="220" height="60" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="500" y="415" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">chroma_data 卷</text>
+<text x="500" y="435" text-anchor="middle" font-size="11" fill="#475569">向量持久化</text>
+</g>
+<g>
+<rect x="720" y="132" width="200" height="56" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="820" y="155" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">用户访问 :80</text>
+<text x="820" y="175" text-anchor="middle" font-size="11" fill="#475569">http://公网IP</text>
+</g>
+</svg></div>
+<p>生产部署是单台腾讯云轻量服务器上的 Docker Compose 全家桶：postgres（PostgreSQL，pgdata 卷持久化）、backend（FastAPI）、frontend（nginx 托管前端并反代 /api）。Chroma 向量数据落在 chroma_data 命名卷。所有服务设 <b>restart: unless-stopped</b>，服务器重启或容器异常会自动拉起，本地电脑关机不影响云端运行。更新代码只需在服务器执行 <b>redeploy.sh</b>（git pull + 重建镜像）。</p>
+</section>
+</main>
+<footer>
+  本图基于项目当前代码（backend FastAPI + frontend Vue3 + Docker Compose 生产部署）生成，供架构理解与对外介绍使用。
+</footer>
+</body>
+</html>
